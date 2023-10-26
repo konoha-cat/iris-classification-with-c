@@ -23,6 +23,7 @@ double sigmoid(double x);
 void apply_softmax(double *input, double *output, int size);
 void Forward(double *input, double wih[][INPUTSIZE], double who[][HIDDENSIZE], double *bias_hidden, double *bias_output, double *hidden, double *output);
 void Backward(double *input, double *hidden, double *output, double *teacher, double wih[][INPUTSIZE], double who[][HIDDENSIZE], double *bias_hidden, double *bias_output, double eta);
+void shuffle_data(Iris iris_data[], int data_size);
 void k_fold_cross_validation(Iris iris_data[], int data_size);
 double train_and_test(Iris iris_data[], int data_size, const char* operation);
 
@@ -67,7 +68,6 @@ int read(Iris iris_data[]) {
 
     return count;
 }
-
 
 double sigmoid(double x) {
     return 1.0 / (1.0 + exp(-x));
@@ -118,7 +118,6 @@ void Forward(double *input, double wih[][INPUTSIZE], double who[][HIDDENSIZE], d
     apply_softmax(pre_softmax, output, OUTPUTSIZE);
 }
 
-
 void Backward(double *input, double *hidden, double *output, double *teacher, double wih[][INPUTSIZE], double who[][HIDDENSIZE], double *bias_hidden, double *bias_output, double eta) {
     double delta_output[OUTPUTSIZE];
     double delta_hidden[HIDDENSIZE];
@@ -161,6 +160,7 @@ double train_and_test(Iris iris_data[], int data_size, const char* operation) {
     double bias_hidden[HIDDENSIZE], bias_output[OUTPUTSIZE];
     double rms = 0.;
     int i, j, i_rms = 0;
+    double accuracy = 0;
 
     srand(1);
 
@@ -194,7 +194,7 @@ double train_and_test(Iris iris_data[], int data_size, const char* operation) {
     }
 
     // Testing
-    printf("Results for %s:\n", operation);
+    //printf("Results for %s:\n", operation);
     int correct_predictions = 0;
     for (int j = 0; j < data_size; j++) {
         input[0] = iris_data[j].sepal_length;
@@ -212,26 +212,41 @@ double train_and_test(Iris iris_data[], int data_size, const char* operation) {
         if (predicted == iris_data[j].species) {
             correct_predictions++;
         }
+
+        accuracy = (double)correct_predictions / data_size;
+        
         rms += (iris_data[j].species - predicted) * (iris_data[j].species - predicted);
         i_rms++;
         //printf("INPUT: %.2f %.2f OUTPUT: %d EXPECTED: %d\n", iris_data[j].sepal_length, iris_data[j].sepal_width, predicted, iris_data[j].species);
     }
+    printf("Accuracy for %s: %.2f%%\n\n", operation, accuracy * 100);
     //double result_rms = sqrt(rms/i_rms);
     //printf("RMS for %s: %f\n", operation, result_rms);
-    double accuracy = (double)correct_predictions / data_size;
-    printf("Accuracy for %s: %.2f%%\n\n", operation, accuracy * 100);
+    //double accuracy = (double)correct_predictions / data_size;
+    //printf("Accuracy for %s: %.2f%%\n\n", operation, accuracy * 100);
 
     return accuracy;
 }
 
+void shuffle_data(Iris iris_data[], int data_size) {
+    srand(time(NULL));  // seed setting
+    for (int i = data_size - 1; i > 0; i--) {
+        int j = rand() % (i + 1);  // select random index
+        Iris temp = iris_data[i];
+        iris_data[i] = iris_data[j];
+        iris_data[j] = temp;
+    }
+}
+
 void k_fold_cross_validation(Iris iris_data[], int data_size) {
+    shuffle_data(iris_data, data_size);  // shuffle data
+    
     int fold_size = data_size / K;
-    double overall_rms = 0.0;
+    double overall_accuracy = 0.0;
 
     for (int k = 0; k < K; k++) {
         printf("Fold %d\n", k+1);
 
-        // Split the data into training and testing based on the current fold
         Iris train_data[data_size - fold_size];
         Iris test_data[fold_size];
 
@@ -244,12 +259,13 @@ void k_fold_cross_validation(Iris iris_data[], int data_size) {
             }
         }
 
-        // Train and test using the split data
-        double rms = train_and_test(train_data, data_size - fold_size, "Training");
-        overall_rms += rms;
-        rms = train_and_test(test_data, fold_size, "Testing");
-        overall_rms += rms;
+        double accuracy = train_and_test(train_data, data_size - fold_size, "Training");
+        overall_accuracy += accuracy;
+        accuracy = train_and_test(test_data, fold_size, "Testing");
+        overall_accuracy += accuracy;
     }
+
+    printf("Overall Accuracy: %.2f%%\n", (overall_accuracy / (2 * K)) * 100);
 }
 
 int main() {
